@@ -4,6 +4,7 @@ from logging import (
     Handler,
     getLogger,
 )
+import os
 
 
 def setup_logger(name, handlers: list[Handler], level=None):
@@ -29,4 +30,6 @@ class FormarttedFileHandler(FileHandler):
         self.setFormatter(formatter)
 
 
-debug_logger = setup_logger("file", [FormarttedFileHandler("unarchive.log")])
+log_path = os.path.join(os.path.dirname(__file__), "extract.log")
+open(log_path, "w").close()
+debug_logger = setup_logger("file", [FormarttedFileHandler(log_path)])

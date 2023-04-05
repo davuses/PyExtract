@@ -1,15 +1,19 @@
+"""Extract archives in target directory recursively """
+
 import time
+from typing import Callable
 import zipfile
 import tarfile
 import os
 from pathlib import Path
-import magic
 from enum import Enum, unique
 import shutil
 import logging
-from zip_decrypter import _ZipDecrypter
 import subprocess
 import traceback
+import magic
+from pwd_loader import load_pwd_list
+from zip_decrypter import _ZipDecrypter
 from logger import debug_logger
 
 setattr(zipfile, "_ZipDecrypter", _ZipDecrypter)
@@ -26,71 +30,62 @@ class UnsafeTarfile(Exception):
     ...
 
 
-@unique
-class ArchiveFileType(Enum):
-    TAR = "application/x-tar", "tar"
-    ZIP = "application/zip", "zip"
-    SEVENTH_ZIP = "application/x-7z-compressed", "7z"
-    RAR = "application/x-rar", "rar"
+class ExtractFail(Exception):
+    ...
 
-    def __new__(cls, *args, **kwds):
-        obj = object.__new__(cls)
-        obj._value_ = args[0]
+
+@unique
+class ArchiveFileType(str, Enum):
+    suffix: str
+
+    def __new__(cls, value, suffix):
+        obj = str.__new__(cls, [value])
+        obj._value_ = value
+        obj.suffix = suffix
         return obj
 
-    # ignore the first param since it's already set by __new__
-    def __init__(self, _: str, suffix: str):
-        self._suffix_ = suffix
-
-    @property
-    def suffix(self):
-        return self._suffix_
-
-    @classmethod
-    def dict(cls):
-        return {c.value: c for c in cls}
+    TAR = ("application/x-tar", "tar")
+    ZIP = ("application/zip", "zip")
+    SEVENTH_ZIP = ("application/x-7z-compressed", "7z")
+    RAR = ("application/x-rar", "rar")
 
 
-ARCHIVE_FILETYPE_MAP = ArchiveFileType.dict()
-
-
-def load_pwd_list(path):
-    with open(path, "r", encoding="utf-8") as file:
-        pwd_list = [line.strip() for line in file.readlines()]
-        return pwd_list
-
-
-PWD_FILEPATH = "E:/linux_windows/passwd.txt"
-
-
-PWD_LIST = load_pwd_list(PWD_FILEPATH)
-
-
-def reprint(text: str):
+def reprint(text: str) -> None:
+    """reprint/overwrite a line"""
     reprinted_text = "\x1b[2K\r" + text
     print(reprinted_text, end="", flush=True)
 
 
-def extract_zip_retry_codec(
-    archive_name: Path, out_path: Path, pwd: str | None = None
-):
-    codecs_list = ["utf-8", "cp936"]
-    done = False
-    for codec in codecs_list:
-        done = extract_zip(archive_name, out_path, pwd, codec=codec)
-        if done:
-            break
-    return done
+def retry_with_codecs(
+    extract_func: Callable[[Path, Path, str | None, str], bool]
+) -> Callable[[Path, Path, str | None], bool]:
+    def wrapper(
+        archive_name: Path, out_path: Path, pwd: str | None = None
+    ) -> bool:
+        done = False
+        codecs_list: list[str] = [
+            "cp936",
+            "utf-8",
+        ]
+        for codec in codecs_list:
+            # print(codec)
+            done = extract_func(archive_name, out_path, pwd, codec)
+            if done:
+                break
+        return done
+
+    return wrapper
 
 
+@retry_with_codecs
 def extract_zip(
     archive_name: Path, out_path: Path, pwd: str | None = None, codec="cp936"
-):
+) -> bool:
     # https://docs.python.org/3/library/zipfile.html#zipfile.ZipFile
     # Monkey patch the decryction of zipfile with C for better performance, it
     # is about 10% slower than the 7z program in testing.
     done = False
-    password = pwd.encode(codec) if pwd else None
+    password: bytes | None = pwd.encode(codec) if pwd else None
     try:
         with zipfile.ZipFile(
             archive_name, "r", metadata_encoding=codec
@@ -99,19 +94,19 @@ def extract_zip(
         done = True
     except RuntimeError as e:
         if "Bad password" not in repr(e):
-            debug_logger.info(f"{archive_name} {e}")
-            debug_logger.debug(f"{archive_name} {traceback.format_exc()}")
+            debug_logger.info("%s %s", archive_name, e)
+            debug_logger.debug("%s %s", archive_name, traceback.format_exc())
         if out_path.exists():
             shutil.rmtree(out_path)
     except Exception as e:
         if out_path.exists():
             shutil.rmtree(out_path)
-        debug_logger.info(f"{archive_name} {e}")
-        debug_logger.debug(f"{archive_name} {traceback.format_exc()}")
+        debug_logger.info("%s %s", archive_name, e)
+        debug_logger.debug("%s %s", archive_name, traceback.format_exc())
     return done
 
 
-def extract_tar(archive_name: Path, out_path: Path, encoding="gbk"):
+def extract_tar(archive_name: Path, out_path: Path, encoding="gbk") -> bool:
     # https://docs.python.org/3/library/tarfile.html
     done = False
     try:
@@ -120,51 +115,24 @@ def extract_tar(archive_name: Path, out_path: Path, encoding="gbk"):
             for file in tar:
                 if not is_tar_safe(file):
                     print("Warning: unsafe tarfile! extrating exits")
-                    raise Exception("unsafe tarfile")
+                    raise UnsafeTarfile("unsafe tarfile")
             tar.extractall(out_path)
         done = True
     except Exception as e:
         if out_path.exists():
             shutil.rmtree(out_path)
-        debug_logger.info(f"{archive_name} {e}")
-        debug_logger.debug(f"{archive_name} {traceback.format_exc()}")
+        debug_logger.info("%s %s", archive_name, e)
+        debug_logger.debug("%s %s", archive_name, traceback.format_exc())
     return done
 
 
-def extract_rar(archive_name: Path, out_path: Path, pwd=None):
+def extract_rar(archive_name: Path, out_path: Path, pwd=None) -> bool:
     # didn't find a usable python library for rar, switch to 7z program
     # 7z reduces absolute paths to relative paths by default
-    done = False
-    try:
-        cmd = [
-            "7z",
-            "x",
-            f"-p{pwd if pwd else ''}",
-            archive_name.as_posix(),
-            f"-o{out_path.as_posix()}",
-        ]
-        proc = subprocess.Popen(
-            cmd,
-            shell=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-        _, errs = proc.communicate()
-        rc = proc.returncode
-        if rc == 0:
-            done = True
-        else:
-            raise Exception(f"Rar extract fails\n{errs.decode()}")
-    except Exception as e:
-        if out_path.exists():
-            shutil.rmtree(out_path)
-        debug_logger.info(f"{archive_name} {e}")
-        debug_logger.debug(f"{archive_name} {traceback.format_exc()}")
-    return done
+    return extract_7z(archive_name, out_path, pwd)
 
 
-def extract_7z(archive_name: Path, out_path: Path, pwd=None):
+def extract_7z(archive_name: Path, out_path: Path, pwd=None) -> bool:
     # give up py7zr and switch to 7z program
     # 7z reduces absolute paths to relative paths by default
     done = False
@@ -188,16 +156,18 @@ def extract_7z(archive_name: Path, out_path: Path, pwd=None):
         if rc == 0:
             done = True
         else:
-            raise Exception(f"7z extract fails\n{errs.decode()}")
+            raise ExtractFail(f"Extract fails\n{errs.decode()}")
     except Exception as e:
         if out_path.exists():
             shutil.rmtree(out_path)
-        debug_logger.info(f"{archive_name} {e}")
-        debug_logger.debug(f"{archive_name} {traceback.format_exc()}")
+        if "Wrong password" in str(e):
+            debug_logger.debug("%s Wrong password? pwd: %s", archive_name, pwd)
+        else:
+            debug_logger.debug("%s %s", archive_name, traceback.format_exc())
     return done
 
 
-def is_tar_safe(tarinfo: tarfile.TarInfo):
+def is_tar_safe(tarinfo: tarfile.TarInfo) -> bool:
     # https://github.com/beatsbears/tarsafe/blob/master/tarsafe/tarsafe.py
     safe = (
         (not tarinfo.islnk())
@@ -208,7 +178,7 @@ def is_tar_safe(tarinfo: tarfile.TarInfo):
     return safe
 
 
-def is_excluded_file(file: Path):
+def is_excluded_file(file: Path) -> bool:
     return (
         file.suffix
         in (
@@ -217,12 +187,14 @@ def is_excluded_file(file: Path):
         )
         or file.name in ("上老王论坛当老王.zip",)
         or any(
-            [sub in file.name for sub in ["地址发布器", "baiduyun.p.downloading"]]
+            (sub in file.name for sub in ["地址发布器", "baiduyun.p.downloading"])
         )
     )
 
 
-def extract_archive(file: Path, archive_type: ArchiveFileType, dir_level):
+def extract_archive(
+    file: Path, archive_type: ArchiveFileType, dir_level
+) -> Path | None:
     """return out_path if done is True, else return None
 
     Args:
@@ -249,12 +221,12 @@ def extract_archive(file: Path, archive_type: ArchiveFileType, dir_level):
     pwd = ""
     done = False
     start = time.time()
-    for pwd in PWD_LIST:
+    for pwd in load_pwd_list():
         reprint(f"{indent} try passwd {pwd}")
         try:
             match archive_type:
                 case ArchiveFileType.ZIP:
-                    done = extract_zip_retry_codec(file, out_path, pwd)
+                    done = extract_zip(file, out_path, pwd)
                 case ArchiveFileType.TAR:
                     done = extract_tar(file, out_path)
                 case ArchiveFileType.SEVENTH_ZIP:
@@ -282,12 +254,11 @@ def extract_archive(file: Path, archive_type: ArchiveFileType, dir_level):
             f" , time cost: {time_cost}s"
         )
         return out_path
-    else:
-        reprint(
-            f"{indent} {bcolors.FAIL}Failed{bcolors.ENDC},"
-            f" {bcolors.OKBLUE}{file}{bcolors.ENDC} maybe no password match\n"
-        )
-        return None
+    reprint(
+        f"{indent} {bcolors.FAIL}Failed{bcolors.ENDC},"
+        f" {bcolors.OKBLUE}{file}{bcolors.ENDC} maybe no password match\n"
+    )
+    return None
 
 
 def extract_archives_recursively(path: str, dir_level=0) -> None:
@@ -300,8 +271,11 @@ def extract_archives_recursively(path: str, dir_level=0) -> None:
         if (not file.is_file()) or is_excluded_file(file):
             continue
         file_type = magic.from_buffer(open(file, "rb").read(2048), mime=True)
-        if file_type in ARCHIVE_FILETYPE_MAP:
-            archive_type = ARCHIVE_FILETYPE_MAP[file_type]
+        try:
+            archive_type = ArchiveFileType(file_type)  # type: ignore
+        except ValueError:
+            pass
+        else:
             out_dir = extract_archive(file, archive_type, dir_level)
             if out_dir:
                 extract_archives_recursively(
