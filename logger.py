@@ -18,7 +18,7 @@ def setup_logger(name, handlers: list[Handler], level=None):
 
 
 class FormarttedFileHandler(FileHandler):
-    def __init__(self, filename):
+    def __init__(self, filename) -> None:
         super().__init__(filename, encoding="utf-8")
         formatter = Formatter(
             (
@@ -30,6 +30,11 @@ class FormarttedFileHandler(FileHandler):
         self.setFormatter(formatter)
 
 
-log_path = os.path.join(os.path.dirname(__file__), "extract.log")
-open(log_path, "w").close()
-debug_logger = setup_logger("file", [FormarttedFileHandler(log_path)])
+def init_debug_logger():
+    log_path = os.path.join(os.path.dirname(__file__), "extract.log")
+    open(log_path, "w", encoding="utf-8").close()
+    logger = setup_logger("file", [FormarttedFileHandler(log_path)])
+    return logger
+
+
+debug_logger = init_debug_logger()

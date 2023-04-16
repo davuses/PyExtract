@@ -1,29 +1,34 @@
 """Extract archives in target directory recursively """
 
-import time
-from typing import Callable
-import zipfile
-import tarfile
-import os
-from pathlib import Path
-from enum import Enum, unique
-import shutil
 import logging
+import os
+import re
+import shutil
+import stat
 import subprocess
+import sys
+import tarfile
+import time
 import traceback
+import zipfile
+from enum import Enum, unique
+from pathlib import Path
+from typing import Callable
+
 import magic
-from pwd_loader import load_pwd_list
-from zip_decrypter import _ZipDecrypter
+
 from logger import debug_logger
+from rename import is_unwanted_substr_present_in_filenames, rename_archives
+from utils import (
+    done_color,
+    failed_color,
+    filename_color,
+    load_pwd_list,
+    reprint,
+)
+from zip_decrypter import _ZipDecrypter
 
 setattr(zipfile, "_ZipDecrypter", _ZipDecrypter)
-
-
-class bcolors:
-    OKBLUE = "\033[94m"
-    OKGREEN = "\033[92m"
-    FAIL = "\033[91m"
-    ENDC = "\033[0m"
 
 
 class UnsafeTarfile(Exception):
@@ -35,25 +40,52 @@ class ExtractFail(Exception):
 
 
 @unique
-class ArchiveFileType(str, Enum):
-    suffix: str
+class ArchiveType(Enum):
+    TAR = "application/x-tar"
+    ZIP = "application/zip"
+    SEVENTH_ZIP = "application/x-7z-compressed"
+    RAR = "application/x-rar"
 
-    def __new__(cls, value, suffix):
-        obj = str.__new__(cls, [value])
-        obj._value_ = value
-        obj.suffix = suffix
-        return obj
+    @classmethod
+    def get_suffix(cls, archive_tpye: "ArchiveType") -> str:
+        suffix_mapping = {
+            cls.TAR: "tar",
+            cls.ZIP: "zip",
+            cls.SEVENTH_ZIP: "7z",
+            cls.RAR: "rar",
+        }
+        return suffix_mapping[archive_tpye]
 
-    TAR = ("application/x-tar", "tar")
-    ZIP = ("application/zip", "zip")
-    SEVENTH_ZIP = ("application/x-7z-compressed", "7z")
-    RAR = ("application/x-rar", "rar")
+
+def remove_readonly(func, path, _) -> None:
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
 
 
-def reprint(text: str) -> None:
-    """reprint/overwrite a line"""
-    reprinted_text = "\x1b[2K\r" + text
-    print(reprinted_text, end="", flush=True)
+def is_tar_safe(tarinfo: tarfile.TarInfo) -> bool:
+    # https://github.com/beatsbears/tarsafe/blob/master/tarsafe/tarsafe.py
+    safe = (
+        (not tarinfo.islnk())
+        and (not tarinfo.issym())
+        and (not tarinfo.name.startswith(os.sep))
+        and not (".." in tarinfo.name)
+    )
+    return safe
+
+
+def is_excluded_file(file: Path) -> bool:
+    return (
+        file.suffix
+        in (
+            ".apk",
+            ".exe",
+        )
+        or file.name in ("上老王论坛当老王.zip",)
+        or any(
+            (sub in file.name for sub in ["地址发布器", "baiduyun.p.downloading"])
+        )
+        or bool(re.search(r"part(?:[2-9]|[1-9][0-9]|100)\.rar", str(file)))
+    )
 
 
 def retry_with_codecs(
@@ -95,14 +127,14 @@ def extract_zip(
     except RuntimeError as e:
         if "Bad password" not in repr(e):
             debug_logger.info("%s %s", archive_name, e)
-            debug_logger.debug("%s %s", archive_name, traceback.format_exc())
+            debug_logger.debug("%s\n%s", archive_name, traceback.format_exc())
         if out_path.exists():
-            shutil.rmtree(out_path)
+            shutil.rmtree(out_path, onerror=remove_readonly)
     except Exception as e:
         if out_path.exists():
-            shutil.rmtree(out_path)
+            shutil.rmtree(out_path, onerror=remove_readonly)
         debug_logger.info("%s %s", archive_name, e)
-        debug_logger.debug("%s %s", archive_name, traceback.format_exc())
+        debug_logger.debug("%s\n%s", archive_name, traceback.format_exc())
     return done
 
 
@@ -120,9 +152,9 @@ def extract_tar(archive_name: Path, out_path: Path, encoding="gbk") -> bool:
         done = True
     except Exception as e:
         if out_path.exists():
-            shutil.rmtree(out_path)
+            shutil.rmtree(out_path, onerror=remove_readonly)
         debug_logger.info("%s %s", archive_name, e)
-        debug_logger.debug("%s %s", archive_name, traceback.format_exc())
+        debug_logger.debug("%s\n%s", archive_name, traceback.format_exc())
     return done
 
 
@@ -159,41 +191,16 @@ def extract_7z(archive_name: Path, out_path: Path, pwd=None) -> bool:
             raise ExtractFail(f"Extract fails\n{errs.decode()}")
     except Exception as e:
         if out_path.exists():
-            shutil.rmtree(out_path)
+            shutil.rmtree(out_path, onerror=remove_readonly)
         if "Wrong password" in str(e):
             debug_logger.debug("%s Wrong password? pwd: %s", archive_name, pwd)
         else:
-            debug_logger.debug("%s %s", archive_name, traceback.format_exc())
+            debug_logger.debug("%s\n%s", archive_name, traceback.format_exc())
     return done
 
 
-def is_tar_safe(tarinfo: tarfile.TarInfo) -> bool:
-    # https://github.com/beatsbears/tarsafe/blob/master/tarsafe/tarsafe.py
-    safe = (
-        (not tarinfo.islnk())
-        and (not tarinfo.issym())
-        and (not tarinfo.name.startswith(os.sep))
-        and not (".." in tarinfo.name)
-    )
-    return safe
-
-
-def is_excluded_file(file: Path) -> bool:
-    return (
-        file.suffix
-        in (
-            ".apk",
-            ".exe",
-        )
-        or file.name in ("上老王论坛当老王.zip",)
-        or any(
-            (sub in file.name for sub in ["地址发布器", "baiduyun.p.downloading"])
-        )
-    )
-
-
 def extract_archive(
-    file: Path, archive_type: ArchiveFileType, dir_level
+    file: Path, archive_type: ArchiveType, dir_level
 ) -> Path | None:
     """return out_path if done is True, else return None
 
@@ -208,15 +215,15 @@ def extract_archive(
     if out_path.exists():
         print(
             f"{'  ' * dir_level}▷ Skipping"
-            f" {bcolors.OKBLUE}{file}{bcolors.ENDC} , type:"
-            f" {archive_type.suffix}"
+            f" {filename_color(str(file))} , type:"
+            f" {ArchiveType.get_suffix(archive_type)}"
         )
         return out_path
     indent = "".join(["  " * dir_level, "└──"])
     print(
         f"{'  ' * dir_level}▶ Extracting"
-        f" {bcolors.OKBLUE}{file}{bcolors.ENDC} , type:"
-        f" {archive_type.suffix}"
+        f" {filename_color(str(file))} , type:"
+        f" {ArchiveType.get_suffix(archive_type)}"
     )
     pwd = ""
     done = False
@@ -225,16 +232,14 @@ def extract_archive(
         reprint(f"{indent} try passwd {pwd}")
         try:
             match archive_type:
-                case ArchiveFileType.ZIP:
+                case ArchiveType.ZIP:
                     done = extract_zip(file, out_path, pwd)
-                case ArchiveFileType.TAR:
+                case ArchiveType.TAR:
                     done = extract_tar(file, out_path)
-                case ArchiveFileType.SEVENTH_ZIP:
+                case ArchiveType.SEVENTH_ZIP:
                     done = extract_7z(file, out_path, pwd)
-                case ArchiveFileType.RAR:
+                case ArchiveType.RAR:
                     done = extract_rar(file, out_path, pwd)
-                case _:
-                    raise RuntimeError("Impossible!")
             if done:
                 break
         except UnsafeTarfile:
@@ -248,21 +253,22 @@ def extract_archive(
         time_cost = round(end - start)
         reprint(f"{indent} passwd {pwd} matches\n")
         print(
-            f"{indent} {bcolors.OKGREEN}Done{bcolors.ENDC}"
-            f" {bcolors.OKBLUE}{file}{bcolors.ENDC} extracted"
-            f" to {bcolors.OKBLUE}{out_path}{bcolors.ENDC}"
+            f"{indent} {done_color('Done')}"
+            f" {filename_color(str(file))} extracted"
+            f" to {filename_color(str(out_path))}"
             f" , time cost: {time_cost}s"
         )
         return out_path
     reprint(
-        f"{indent} {bcolors.FAIL}Failed{bcolors.ENDC},"
-        f" {bcolors.OKBLUE}{file}{bcolors.ENDC} maybe no password match\n"
+        f"{indent} {failed_color('Failed')}"
+        f" {filename_color(str(file))} Wrong passowrd or invalid archive?\n"
     )
     return None
 
 
 def extract_archives_recursively(path: str, dir_level=0) -> None:
     # don't match files in subdirs if in root directory
+    unwanted_filenames_dirs: set[Path] = set()
     files_generator = (
         Path(path).iterdir() if dir_level == 0 else Path(path).glob("**/*")
     )
@@ -272,7 +278,7 @@ def extract_archives_recursively(path: str, dir_level=0) -> None:
             continue
         file_type = magic.from_buffer(open(file, "rb").read(2048), mime=True)
         try:
-            archive_type = ArchiveFileType(file_type)  # type: ignore
+            archive_type = ArchiveType(file_type)
         except ValueError:
             pass
         else:
@@ -281,10 +287,39 @@ def extract_archives_recursively(path: str, dir_level=0) -> None:
                 extract_archives_recursively(
                     out_dir.as_posix(), dir_level=dir_level + 1
                 )
+            else:
+                if is_unwanted_substr_present_in_filenames(file.parent):
+                    unwanted_filenames_dirs.add(file.parent)
+    if unwanted_filenames_dirs:
+        handle_unwanted_filenames(unwanted_filenames_dirs)
+
+
+def handle_unwanted_filenames(unwanted_filenames_dirs: set[Path]) -> None:
+    print(
+        failed_color(
+            "\nSome unwanted sub-strings are present in"
+            " filenames within following dirs:"
+        )
+    )
+    for d in unwanted_filenames_dirs:
+        print(f"{filename_color(str(d))}")
+    sys.stdout.write("\nDo you want to rename them? [y/n]")
+    choice = input().lower()
+    if choice in ["y", "Y"]:
+        for d in unwanted_filenames_dirs:
+            rename_archives(str(d))
+        sys.stdout.write("\nDo you want to retry extracting? [y/n]")
+        choice = input().lower()
+        if choice in ["y", "Y"]:
+            for d in unwanted_filenames_dirs:
+                extract_archives_recursively(str(d), dir_level=0)
+
+
+def main() -> None:
+    debug_logger.setLevel(logging.DEBUG)
+    target_dir = "G:/BaiduNet/"
+    extract_archives_recursively(target_dir)
 
 
 if __name__ == "__main__":
-    debug_logger.setLevel(logging.DEBUG)
-    # extract_archive(Path("新建文件夹 (3).rar"), ArchiveFileType.RAR, dir_level=0)
-    target_dir = "G:/BaiduNet/"
-    extract_archives_recursively(target_dir)
+    main()

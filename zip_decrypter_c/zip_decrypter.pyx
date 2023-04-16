@@ -5,6 +5,7 @@
 # cython: wraparound = False
 # cython: nonecheck = False
 # cython: profile = False
+# https://github.com/ziyuang/czipfile/blob/ba592c44c79d830a063210d598737f91f4333035/czipfile.pyx
 
 """
 cython implementation of zip decryption
