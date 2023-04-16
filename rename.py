@@ -3,9 +3,9 @@ import sys
 from pathlib import Path
 
 from logger import debug_logger
-from utils import filename_color
+from utils import filename_color, config
 
-UNWANTED_SUBSTRS = ["删除", "删我", "删"]
+UNWANTED_SUBSTRS = config.rename_substrings
 
 
 def is_unwanted_substr_present_in_filenames(target_dir) -> bool:

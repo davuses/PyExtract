@@ -23,8 +23,9 @@ from utils import (
     done_color,
     failed_color,
     filename_color,
-    load_pwd_list,
+    password_list,
     reprint,
+    config,
 )
 from zip_decrypter import _ZipDecrypter
 
@@ -75,15 +76,9 @@ def is_tar_safe(tarinfo: tarfile.TarInfo) -> bool:
 
 def is_excluded_file(file: Path) -> bool:
     return (
-        file.suffix
-        in (
-            ".apk",
-            ".exe",
-        )
-        or file.name in ("上老王论坛当老王.zip",)
-        or any(
-            (sub in file.name for sub in ["地址发布器", "baiduyun.p.downloading"])
-        )
+        file.suffix in config.exclude_suffix
+        or file.name in config.exclude_filename
+        or any((sub in file.name for sub in config.exclude_substrings))
         or bool(re.search(r"part(?:[2-9]|[1-9][0-9]|100)\.rar", str(file)))
     )
 
@@ -95,12 +90,9 @@ def retry_with_codecs(
         archive_name: Path, out_path: Path, pwd: str | None = None
     ) -> bool:
         done = False
-        codecs_list: list[str] = [
-            "cp936",
-            "utf-8",
-        ]
+        codecs_list = config.zip_codecs
         for codec in codecs_list:
-            # print(codec)
+            debug_logger.debug("retry with codec: %s", codec)
             done = extract_func(archive_name, out_path, pwd, codec)
             if done:
                 break
@@ -128,6 +120,8 @@ def extract_zip(
         if "Bad password" not in repr(e):
             debug_logger.info("%s %s", archive_name, e)
             debug_logger.debug("%s\n%s", archive_name, traceback.format_exc())
+        else:
+            debug_logger.info("%s wrong password", archive_name)
         if out_path.exists():
             shutil.rmtree(out_path, onerror=remove_readonly)
     except Exception as e:
@@ -228,7 +222,7 @@ def extract_archive(
     pwd = ""
     done = False
     start = time.time()
-    for pwd in load_pwd_list():
+    for pwd in password_list:
         reprint(f"{indent} try passwd {pwd}")
         try:
             match archive_type:
@@ -317,7 +311,7 @@ def handle_unwanted_filenames(unwanted_filenames_dirs: set[Path]) -> None:
 
 def main() -> None:
     debug_logger.setLevel(logging.DEBUG)
-    target_dir = "G:/BaiduNet/"
+    target_dir = config.target_directory
     extract_archives_recursively(target_dir)
 
 
