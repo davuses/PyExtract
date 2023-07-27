@@ -7,7 +7,6 @@ import shutil
 import stat
 import subprocess
 import sys
-import tarfile
 import time
 import traceback
 import zipfile
@@ -16,18 +15,21 @@ from pathlib import Path
 from typing import Callable
 
 import magic
+from zip_decrypter import _ZipDecrypter
 
 from logger import debug_logger
-from rename import is_unwanted_substr_present_in_filenames, rename_archives
+from rename import (
+    is_unwanted_substr_present_in_filenames,
+    rename_archives_in_dir,
+)
 from utils import (
+    config,
     done_color,
     failed_color,
     filename_color,
-    password_list,
+    passwords,
     reprint,
-    config,
 )
-from zip_decrypter import _ZipDecrypter
 
 setattr(zipfile, "_ZipDecrypter", _ZipDecrypter)
 
@@ -48,14 +50,14 @@ class ArchiveType(Enum):
     RAR = "application/x-rar"
 
     @classmethod
-    def get_suffix(cls, archive_tpye: "ArchiveType") -> str:
+    def get_suffix(cls, archive_type: "ArchiveType") -> str:
         suffix_mapping = {
             cls.TAR: "tar",
             cls.ZIP: "zip",
             cls.SEVENTH_ZIP: "7z",
             cls.RAR: "rar",
         }
-        return suffix_mapping[archive_tpye]
+        return suffix_mapping[archive_type]
 
 
 def remove_readonly(func, path, _) -> None:
@@ -63,23 +65,15 @@ def remove_readonly(func, path, _) -> None:
     func(path)
 
 
-def is_tar_safe(tarinfo: tarfile.TarInfo) -> bool:
-    # https://github.com/beatsbears/tarsafe/blob/master/tarsafe/tarsafe.py
-    safe = (
-        (not tarinfo.islnk())
-        and (not tarinfo.issym())
-        and (not tarinfo.name.startswith(os.sep))
-        and not (".." in tarinfo.name)
-    )
-    return safe
-
-
 def is_excluded_file(file: Path) -> bool:
+    """check if file should be excluded, we only want the fist part of a multi-volume"""
     return (
         file.suffix in config.exclude_suffix
         or file.name in config.exclude_filename
         or any((sub in file.name for sub in config.exclude_substrings))
-        or bool(re.search(r"part(?:[2-9]|[1-9][0-9]|100)\.rar", str(file)))
+        or bool(
+            re.search(r"part(?:[2-9]|[1-9][0-9]|100|0[2-9])\.rar", str(file))
+        )
     )
 
 
@@ -106,50 +100,29 @@ def extract_zip(
     archive_name: Path, out_path: Path, pwd: str | None = None, codec="cp936"
 ) -> bool:
     # https://docs.python.org/3/library/zipfile.html#zipfile.ZipFile
-    # Monkey patch the decryction of zipfile with C for better performance, it
+    # Monkey patch the decryption of zipfile with C for better performance, it
     # is about 10% slower than the 7z program in testing.
     done = False
     password: bytes | None = pwd.encode(codec) if pwd else None
     try:
         with zipfile.ZipFile(
             archive_name, "r", metadata_encoding=codec
-        ) as myzip:
-            myzip.extractall(out_path, pwd=password)
+        ) as zip_file:
+            zip_file.extractall(out_path, pwd=password)
         done = True
-    except RuntimeError as e:
+    except Exception as e:
+        if out_path.exists():
+            shutil.rmtree(out_path, onerror=remove_readonly)
         if "Bad password" not in repr(e):
             debug_logger.info("%s %s", archive_name, e)
             debug_logger.debug("%s\n%s", archive_name, traceback.format_exc())
         else:
             debug_logger.info("%s wrong password", archive_name)
-        if out_path.exists():
-            shutil.rmtree(out_path, onerror=remove_readonly)
-    except Exception as e:
-        if out_path.exists():
-            shutil.rmtree(out_path, onerror=remove_readonly)
-        debug_logger.info("%s %s", archive_name, e)
-        debug_logger.debug("%s\n%s", archive_name, traceback.format_exc())
     return done
 
 
-def extract_tar(archive_name: Path, out_path: Path, encoding="gbk") -> bool:
-    # https://docs.python.org/3/library/tarfile.html
-    done = False
-    try:
-        with tarfile.open(archive_name, "r", encoding=encoding) as tar:
-            tar.getnames()
-            for file in tar:
-                if not is_tar_safe(file):
-                    print("Warning: unsafe tarfile! extrating exits")
-                    raise UnsafeTarfile("unsafe tarfile")
-            tar.extractall(out_path)
-        done = True
-    except Exception as e:
-        if out_path.exists():
-            shutil.rmtree(out_path, onerror=remove_readonly)
-        debug_logger.info("%s %s", archive_name, e)
-        debug_logger.debug("%s\n%s", archive_name, traceback.format_exc())
-    return done
+def extract_tar(archive_name: Path, out_path: Path) -> bool:
+    return extract_7z(archive_name, out_path)
 
 
 def extract_rar(archive_name: Path, out_path: Path, pwd=None) -> bool:
@@ -222,7 +195,7 @@ def extract_archive(
     pwd = ""
     done = False
     start = time.time()
-    for pwd in password_list:
+    for pwd in passwords:
         reprint(f"{indent} try passwd {pwd}")
         try:
             match archive_type:
@@ -255,7 +228,7 @@ def extract_archive(
         return out_path
     reprint(
         f"{indent} {failed_color('Failed')}"
-        f" {filename_color(str(file))} Wrong passowrd or invalid archive?\n"
+        f" {filename_color(str(file))} Wrong password or invalid archive?\n"
     )
     return None
 
@@ -301,7 +274,7 @@ def handle_unwanted_filenames(unwanted_filenames_dirs: set[Path]) -> None:
     choice = input().lower()
     if choice in ["y", "Y"]:
         for d in unwanted_filenames_dirs:
-            rename_archives(str(d))
+            rename_archives_in_dir(str(d))
         sys.stdout.write("\nDo you want to retry extracting? [y/n]")
         choice = input().lower()
         if choice in ["y", "Y"]:

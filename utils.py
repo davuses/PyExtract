@@ -38,6 +38,10 @@ class InvalidPath(Exception):
     ...
 
 
+class BadFormat(Exception):
+    ...
+
+
 @dataclasses.dataclass
 class ExtractConfig:
     zip_codecs: list[str]
@@ -65,7 +69,8 @@ class ExtractConfig:
 
 
 def load_config() -> ExtractConfig:
-    with open("config.yaml", "r", encoding="utf-8") as file:
+    config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
+    with open(config_path, "r", encoding="utf-8") as file:
         yaml_config = yaml.safe_load(file)
         try:
             extract_config = ExtractConfig(**yaml_config)
@@ -78,10 +83,12 @@ def load_config() -> ExtractConfig:
 config = load_config()
 
 
-def load_pwd_list(path: str) -> list[str]:
+def load_passwords(path: str) -> list[str]:
     with open(path, "r", encoding="utf-8") as file:
         pwd_list = [line.strip() for line in file.readlines()]
     delimiter = "------"
+    if delimiter not in pwd_list:
+        raise BadFormat("Password file wrong format, delimiter not found")
     pwds_second, pwds_first = [
         list(y)
         for x, y in itertools.groupby(pwd_list, lambda z: z == delimiter)
@@ -91,4 +98,4 @@ def load_pwd_list(path: str) -> list[str]:
     return ranked_pwd_list
 
 
-password_list = load_pwd_list(config.password_filepath)
+passwords = load_passwords(config.password_filepath)
