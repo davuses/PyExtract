@@ -1,6 +1,5 @@
 """Extract archives in target directory recursively """
 
-import logging
 import os
 import re
 import shutil
@@ -15,14 +14,12 @@ from pathlib import Path
 from typing import Callable
 
 import magic
-from zip_decrypter import _ZipDecrypter
-
-from logger import debug_logger
-from rename import (
-    is_unwanted_substr_present_in_filenames,
+from .file_renaming import (
+    has_unwanted_substrings_in_filenames,
     rename_archives_in_dir,
 )
-from utils import (
+from .logging_utils import my_logger
+from .utils import (
     config,
     done_color,
     failed_color,
@@ -30,6 +27,7 @@ from utils import (
     passwords,
     reprint,
 )
+from .zip_decrypter import _ZipDecrypter
 
 setattr(zipfile, "_ZipDecrypter", _ZipDecrypter)
 
@@ -86,7 +84,7 @@ def retry_with_codecs(
         done = False
         codecs_list = config.zip_codecs
         for codec in codecs_list:
-            debug_logger.debug("retry with codec: %s", codec)
+            my_logger.info("retry with codec: %s", codec)
             done = extract_func(archive_name, out_path, pwd, codec)
             if done:
                 break
@@ -114,10 +112,9 @@ def extract_zip(
         if out_path.exists():
             shutil.rmtree(out_path, onerror=remove_readonly)
         if "Bad password" not in repr(e):
-            debug_logger.info("%s %s", archive_name, e)
-            debug_logger.debug("%s\n%s", archive_name, traceback.format_exc())
+            my_logger.error("%s\n%s", archive_name, traceback.format_exc())
         else:
-            debug_logger.info("%s wrong password", archive_name)
+            my_logger.warning("%s wrong password", archive_name)
     return done
 
 
@@ -160,9 +157,9 @@ def extract_7z(archive_name: Path, out_path: Path, pwd=None) -> bool:
         if out_path.exists():
             shutil.rmtree(out_path, onerror=remove_readonly)
         if "Wrong password" in str(e):
-            debug_logger.debug("%s Wrong password? pwd: %s", archive_name, pwd)
+            my_logger.warning("%s Wrong password? pwd: %s", archive_name, pwd)
         else:
-            debug_logger.debug("%s\n%s", archive_name, traceback.format_exc())
+            my_logger.error("%s\n%s", archive_name, traceback.format_exc())
     return done
 
 
@@ -233,11 +230,13 @@ def extract_archive(
     return None
 
 
-def extract_archives_recursively(path: str, dir_level=0) -> None:
+def extract_archives_recursively(target_dir: str | Path, dir_level=0) -> None:
     # don't match files in subdirs if in root directory
-    unwanted_filenames_dirs: set[Path] = set()
+    dirs_to_rename_files: set[Path] = set()
     files_generator = (
-        Path(path).iterdir() if dir_level == 0 else Path(path).glob("**/*")
+        Path(target_dir).iterdir()
+        if dir_level == 0
+        else Path(target_dir).glob("**/*")
     )
 
     for file in files_generator:
@@ -255,35 +254,33 @@ def extract_archives_recursively(path: str, dir_level=0) -> None:
                     out_dir.as_posix(), dir_level=dir_level + 1
                 )
             else:
-                if is_unwanted_substr_present_in_filenames(file.parent):
-                    unwanted_filenames_dirs.add(file.parent)
-    if unwanted_filenames_dirs:
-        handle_unwanted_filenames(unwanted_filenames_dirs)
+                if has_unwanted_substrings_in_filenames(file.parent):
+                    dirs_to_rename_files.add(file.parent)
+    if dirs_to_rename_files:
+        rename_files_of_dirs(dirs_to_rename_files)
 
 
-def handle_unwanted_filenames(unwanted_filenames_dirs: set[Path]) -> None:
+def rename_files_of_dirs(dirs: set[Path]) -> None:
     print(
         failed_color(
-            "\nSome unwanted sub-strings are present in"
-            " filenames within following dirs:"
+            "\nSome files probably need to be renamed in these directories"
         )
     )
-    for d in unwanted_filenames_dirs:
+    for d in dirs:
         print(f"{filename_color(str(d))}")
-    sys.stdout.write("\nDo you want to rename them? [y/n]")
+    sys.stdout.write("\nTake a look? [y/n]")
     choice = input().lower()
     if choice in ["y", "Y"]:
-        for d in unwanted_filenames_dirs:
-            rename_archives_in_dir(str(d))
+        for d in dirs:
+            rename_archives_in_dir(d)
         sys.stdout.write("\nDo you want to retry extracting? [y/n]")
         choice = input().lower()
         if choice in ["y", "Y"]:
-            for d in unwanted_filenames_dirs:
-                extract_archives_recursively(str(d), dir_level=0)
+            for d in dirs:
+                extract_archives_recursively(d, dir_level=0)
 
 
 def main() -> None:
-    debug_logger.setLevel(logging.DEBUG)
     target_dir = config.target_directory
     extract_archives_recursively(target_dir)
 

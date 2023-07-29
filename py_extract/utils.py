@@ -69,7 +69,7 @@ class ExtractConfig:
 
 
 def load_config() -> ExtractConfig:
-    config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
+    config_path = os.path.join("config.yaml")
     with open(config_path, "r", encoding="utf-8") as file:
         yaml_config = yaml.safe_load(file)
         try:

@@ -9,8 +9,8 @@ lib_modules = []
 
 lib_modules.append(
     Extension(
-        "zip_decrypter",
-        ["zip_decrypter.pyx"],
+        "py_extract.zip_decrypter",
+        ["py_extract/zip_decrypter.pyx"],
         language="c",
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,

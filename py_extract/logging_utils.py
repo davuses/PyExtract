@@ -32,9 +32,10 @@ class FormattedFileHandler(FileHandler):
 
 def init_debug_logger():
     log_path = os.path.join(os.path.dirname(__file__), "py_extract.log")
-    open(log_path, "w", encoding="utf-8").close()
+    # open(log_path, "w", encoding="utf-8").close()
     logger = setup_logger("file", [FormattedFileHandler(log_path)])
     return logger
 
 
-debug_logger = init_debug_logger()
+my_logger = init_debug_logger()
+# my_logger.setLevel(logging.DEBUG)
