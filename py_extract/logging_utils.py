@@ -1,20 +1,8 @@
-import os
 from logging import (
     FileHandler,
     Formatter,
-    Handler,
     getLogger,
 )
-
-
-def setup_logger(name, handlers: list[Handler], level=None):
-    logger = getLogger(name)
-    if level:
-        logger.setLevel(level=level)
-    for handler in handlers:
-        logger.addHandler(handler)
-
-    return logger
 
 
 class FormattedFileHandler(FileHandler):
@@ -30,12 +18,12 @@ class FormattedFileHandler(FileHandler):
         self.setFormatter(formatter)
 
 
-def init_debug_logger():
-    log_path = os.path.join(os.path.dirname(__file__), "py_extract.log")
+def setup_logger(level="WARNING"):
+    # log_path = os.path.join(os.path.dirname(__file__), "py_extract.log")
+    log_path = "py_extract.log"
     # open(log_path, "w", encoding="utf-8").close()
-    logger = setup_logger("file", [FormattedFileHandler(log_path)])
+    logger = getLogger("file")
+    logger.setLevel(level=level)
+    logger.addHandler(FormattedFileHandler(log_path))
+
     return logger
-
-
-my_logger = init_debug_logger()
-# my_logger.setLevel(logging.DEBUG)

@@ -1,0 +1,27 @@
+# addtional encodings of zip archives, the defualt is utf-8
+# see https://en.wikipedia.org/wiki/Windows_code_page
+# cp936 is used for Chinese encoding
+zip_metadata_encoding = ["cp936"]
+
+# language: en, cn
+language = "cn"
+
+# automatically rename archives with bad filenames
+auto_rename = false
+
+logging_level = "warning"
+
+
+[path]
+target_directory = "D:/download"
+password_path = "D:/passwords.txt"
+
+[exclude]
+# exclude filenames, you can leave them empty: suffixes=[]
+suffixes = [".apk", ".exe"]
+filenames = ["do_not_extract_me.zip"]
+substrings = ["not_an_archive"]
+
+[rename]
+# rename files whose filenames contain these substrings:
+substrings = ["删除", "删除我", "delete_this"]

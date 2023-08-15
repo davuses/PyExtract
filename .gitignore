@@ -106,8 +106,12 @@ ENV/
 .vscode/
 .idea/
 
+# temp file
+temp/
+temp.ipynb
+
 # config file
-config.yaml
+py_extract_config.toml
 
 # cython file
 *.c

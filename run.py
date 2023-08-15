@@ -1,5 +1,7 @@
-from py_extract import py_extract
+from py_extract import create_py_extractor
 
-py_extract.main()
+py_extractor = create_py_extractor()
+
+py_extractor.run()
 
 input("Press Enter to exit...")

@@ -1,0 +1,101 @@
+# English translations for PROJECT.
+# Copyright (C) 2023 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2023.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2023-08-09 02:35+0800\n"
+"PO-Revision-Date: 2023-08-12 22:24+0800\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.12.1\n"
+
+#: py_extract/py_extract.py:305 py_extract/py_extract.py:310
+#: py_extract/py_extract.py:321
+msgid "try passwd"
+msgstr ""
+
+#: py_extract/py_extract.py:306
+msgid "Skipping"
+msgstr ""
+
+#: py_extract/py_extract.py:307 py_extract/py_extract.py:309
+msgid "type"
+msgstr ""
+
+#: py_extract/py_extract.py:308
+msgid "Extracting"
+msgstr ""
+
+#: py_extract/py_extract.py:311
+msgid "passwd"
+msgstr ""
+
+#: py_extract/py_extract.py:312
+msgid "matches"
+msgstr ""
+
+#: py_extract/py_extract.py:313
+msgid "Done"
+msgstr ""
+
+#: py_extract/py_extract.py:314
+msgid "extracted to"
+msgstr ""
+
+#: py_extract/py_extract.py:315
+msgid "time cost"
+msgstr ""
+
+#: py_extract/py_extract.py:316
+msgid "Failed"
+msgstr ""
+
+#: py_extract/py_extract.py:317
+msgid "Wrong password or invalid archive"
+msgstr ""
+
+#: py_extract/py_extract.py:318
+msgid "Some files probably need to be renamed in these directories"
+msgstr ""
+
+#: py_extract/py_extract.py:319
+msgid "Take a look"
+msgstr ""
+
+#: py_extract/py_extract.py:320
+msgid "Do you want to retry extracting"
+msgstr ""
+
+#: py_extract/file_renaming.py:48
+msgid "rename done"
+msgstr ""
+
+#: py_extract/file_renaming.py:50
+msgid "skip rename"
+msgstr ""
+
+msgid ""
+"Din't find 7z command, please make sure 7z is installed and available in "
+"PATH env"
+msgstr ""
+
+msgid "Do you want to rename"
+msgstr ""
+
+msgid "to"
+msgstr ""
+
+msgid "retry extracting"
+msgstr ""
+
+msgid "target directory"
+msgstr ""

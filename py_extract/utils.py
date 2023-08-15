@@ -1,101 +1,55 @@
-import dataclasses
 import itertools
-import os
-
-import yaml
+from typing import TextIO
 
 
-def reprint(text: str) -> None:
-    """reprint/overwrite a line"""
-    reprinted_text = "\x1b[2K\r" + text
-    print(reprinted_text, end="", flush=True)
+def output_same_line(text: str) -> None:
+    """Output to the same line"""
+    print("\x1b[2K\r" + text, end="", flush=True)
 
 
-class bcolors:
-    OKBLUE = "\033[94m"
-    OKGREEN = "\033[92m"
+class BColors:
+    OK_BLUE = "\033[94m"
+    OK_GREEN = "\033[92m"
     FAIL = "\033[91m"
-    ENDC = "\033[0m"
+    END = "\033[0m"
 
 
 def filename_color(text: str) -> str:
-    return f"{bcolors.OKBLUE}{text}{bcolors.ENDC}"
+    return f"{BColors.OK_BLUE}{text}{BColors.END}"
 
 
 def done_color(text: str) -> str:
-    return f"{bcolors.OKGREEN}{text}{bcolors.ENDC}"
+    return f"{BColors.OK_GREEN}{text}{BColors.END}"
 
 
 def failed_color(text: str) -> str:
-    return f"{bcolors.FAIL}{text}{bcolors.ENDC}"
+    return f"{BColors.FAIL}{text}{BColors.END}"
 
 
-class InvalidConfig(Exception):
-    ...
+def load_passwords(pwd_file: TextIO) -> list[str]:
+    """passwords file should be like:
+    ```
+    pwd1_second_group_to_try
+    pwd2_second_group_to_try
 
+    pwd1_first_group_to_try
+    pwd2_first_group_to_try
+    ```
+    """
+    lines = [line.strip() for line in pwd_file.readlines()]
 
-class InvalidPath(Exception):
-    ...
+    def strip_list(to_strip, rem):
+        to_strip = list(itertools.dropwhile(lambda x: x == rem, to_strip))
+        to_strip = list(itertools.dropwhile(lambda x: x == rem, to_strip[::-1]))
+        return to_strip[::-1]
 
-
-class BadFormat(Exception):
-    ...
-
-
-@dataclasses.dataclass
-class ExtractConfig:
-    zip_codecs: list[str]
-    exclude_suffix: list[str]
-    exclude_filename: list[str]
-    exclude_substrings: list[str]
-    rename_substrings: list[str]
-    target_directory: str
-    password_filepath: str
-
-    def __post_init__(self) -> None:
-        assert isinstance(self.zip_codecs, list), "Invalid config file"
-        assert isinstance(self.exclude_suffix, list), "Invalid config file"
-        assert isinstance(self.exclude_filename, list), "Invalid config file"
-        assert isinstance(self.exclude_substrings, list), "Invalid config file"
-        assert isinstance(self.rename_substrings, list), "Invalid config file"
-        assert isinstance(self.target_directory, str), "Invalid config file"
-        if not os.path.exists(self.target_directory):
-            raise InvalidPath("target directory doesn't exist")
-        assert isinstance(self.password_filepath, str), "Invalid config file"
-        if not os.path.exists(self.password_filepath):
-            raise InvalidPath("password file doesn't exist")
-
-        self.rename_substrings = sorted(self.rename_substrings, reverse=True)
-
-
-def load_config() -> ExtractConfig:
-    config_path = os.path.join("config.yaml")
-    with open(config_path, "r", encoding="utf-8") as file:
-        yaml_config = yaml.safe_load(file)
-        try:
-            extract_config = ExtractConfig(**yaml_config)
-        except (TypeError, AssertionError) as exc:
-            raise InvalidConfig("config file is invalid") from exc
-
-        return extract_config
-
-
-config = load_config()
-
-
-def load_passwords(path: str) -> list[str]:
-    with open(path, "r", encoding="utf-8") as file:
-        pwd_list = [line.strip() for line in file.readlines()]
-    delimiter = "------"
-    if delimiter not in pwd_list:
-        raise BadFormat("Password file wrong format, delimiter not found")
-    pwds_second, pwds_first = [
+    lines = strip_list(lines, "")
+    delimiter = ""
+    if delimiter not in lines:
+        return lines
+    groups = [
         list(y)
-        for x, y in itertools.groupby(pwd_list, lambda z: z == delimiter)
+        for x, y in itertools.groupby(lines, lambda z: z == delimiter)
         if not x
     ]
-    ranked_pwd_list = pwds_first + pwds_second
-    return ranked_pwd_list
-
-
-passwords = load_passwords(config.password_filepath)
+    return list(itertools.chain.from_iterable(groups[::-1]))
