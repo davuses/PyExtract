@@ -9,6 +9,7 @@ language = "cn"
 # automatically rename archives with bad filenames
 auto_rename = false
 
+# logging level: "warning", "debug"
 logging_level = "warning"
 
 

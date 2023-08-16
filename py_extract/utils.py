@@ -29,11 +29,11 @@ def failed_color(text: str) -> str:
 def load_passwords(pwd_file: TextIO) -> list[str]:
     """passwords file should be like:
     ```
-    pwd1_second_group_to_try
-    pwd2_second_group_to_try
+    password_one_in_second_group
+    password_two_in_second_group
 
-    pwd1_first_group_to_try
-    pwd2_first_group_to_try
+    password_one_in_first_group
+    password_two_in_first_group
     ```
     """
     lines = [line.strip() for line in pwd_file.readlines()]

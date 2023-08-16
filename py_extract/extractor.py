@@ -37,8 +37,19 @@ class UnsafeTarfile(Exception):
     ...
 
 
-class ExtractFail(Exception):
+class SevenZipExtractFail(Exception):
     ...
+
+
+class SevenZipCmdNotFound(Exception):
+    ...
+
+
+class ExtractStatusCode(Enum):
+    SUCCESS = 0
+    WRONG_PASSWORD = 1
+    FAIL = 2
+    WRONG_ENCODING = 3
 
 
 @unique
@@ -100,51 +111,56 @@ class PyExtractor:
         out_path: Path,
         pwd: str | None = None,
         default_encoding="utf-8",
-    ) -> bool:
+    ):
         # https://docs.python.org/3/library/zipfile.html#zipfile.ZipFile
         # Monkey patch the decryption of zipfile with C for better performance, it
         # is about 10% slower than the 7z program in testing.
         additional_encodings = self.config.zip_metadata_encoding
-        additional_encodings.insert(0, default_encoding)
-        done = False
+        additional_encodings.append(default_encoding)
         for encoding in additional_encodings:
-            self.logger.info("retry with codec: %s", encoding)
+            self.logger.info("try encoding: %s", encoding)
             password: bytes | None = pwd.encode(encoding) if pwd else None
             try:
                 with zipfile.ZipFile(
                     archive_name, "r", metadata_encoding=encoding
                 ) as zip_file:
                     zip_file.extractall(out_path, pwd=password)
-                done = True
-            except NotImplementedError:
-                # some compression algorithms are not supported in Python's zipfile lib
-                return self.extract_7z(archive_name, out_path, pwd=pwd)
-            except Exception as e:
+                    return ExtractStatusCode.SUCCESS
+            except Exception as exc:
                 if out_path.exists():
                     shutil.rmtree(out_path, onerror=remove_readonly)
-                if "Bad password" not in repr(e):
-                    self.logger.error(
-                        "%s\n%s", archive_name, traceback.format_exc()
+                if isinstance(exc, NotImplementedError):
+                    # some algorithms are not supported by zipfile
+                    return self.extract_7z(archive_name, out_path, pwd=pwd)
+                if isinstance(exc, UnicodeDecodeError):
+                    self.logger.info(
+                        "%s cannot decode %s", encoding, archive_name
                     )
-                else:
-                    self.logger.warning("%s wrong password", archive_name)
-            else:
-                break
-        return done
+                    continue
+                if "Bad password" in repr(exc):
+                    self.logger.info("%s wrong password", archive_name)
+                    return ExtractStatusCode.WRONG_PASSWORD
+                traceback_info = traceback.format_exc()
+                self.logger.error("%s\n%s", archive_name, traceback_info)
+                return ExtractStatusCode.FAIL
+        self.logger.error(
+            "None of encodings %s can decode %s",
+            additional_encodings,
+            archive_name,
+        )
+        return ExtractStatusCode.WRONG_ENCODING
 
-    def extract_tar(self, archive_name: Path, out_path: Path) -> bool:
+    def extract_tar(self, archive_name: Path, out_path: Path):
         return self.extract_7z(archive_name, out_path)
 
-    def extract_rar(self, archive_name: Path, out_path: Path, pwd=None) -> bool:
+    def extract_rar(self, archive_name: Path, out_path: Path, pwd=None):
         # didn't find a usable python library for rar, switch to 7z program
         # 7z reduces absolute paths to relative paths by default
         return self.extract_7z(archive_name, out_path, pwd)
 
-    def extract_7z(self, archive_name: Path, out_path: Path, pwd=None) -> bool:
-        # give up py7zr and switch to 7z program
-        # 7z reduces absolute paths to relative paths by default
-        done = False
+    def extract_7z(self, archive_name: Path, out_path: Path, pwd=None):
         try:
+            assert shutil.which("7z")
             cmd = [
                 "7z",
                 "x",
@@ -158,32 +174,26 @@ class PyExtractor:
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
+                universal_newlines=True,
             )
             _stdout, errs = proc.communicate()
             rc = proc.returncode
-            if rc == 0:
-                done = True
-            else:
-                raise ExtractFail(f"Extract fails\n{errs.decode()}")
-        except FileNotFoundError:
-            print(
-                _(
-                    "Din't find 7z command, please make sure 7z is installed"
-                    " and available in PATH env"
-                )
-            )
-        except Exception as e:
+            if rc != 0:
+                raise SevenZipExtractFail(f"Extract fails, {errs}")
+        except Exception as exc:
             if out_path.exists():
                 shutil.rmtree(out_path, onerror=remove_readonly)
-            if "Wrong password" in str(e):
-                self.logger.warning(
-                    "%s Wrong password? pwd: %s", archive_name, pwd
+            if isinstance(exc, AssertionError):
+                self.logger.error("7z command not found")
+                raise SevenZipCmdNotFound from exc
+            if "Wrong password" in str(exc):
+                self.logger.info(
+                    "%s , Wrong password: %s", archive_name, pwd
                 )
-            else:
-                self.logger.error(
-                    "%s\n%s", archive_name, traceback.format_exc()
-                )
-        return done
+                return ExtractStatusCode.WRONG_PASSWORD
+            self.logger.error("%s\n%s", archive_name, traceback.format_exc())
+            return ExtractStatusCode.FAIL
+        return ExtractStatusCode.SUCCESS
 
     def extract_archive(
         self, file: Path, archive_type: ArchiveType, dir_level
@@ -212,9 +222,10 @@ class PyExtractor:
             f" {ArchiveType.get_suffix(archive_type)}"
         )
         pwd = ""
-        done = False
         start = time.time()
         passwords_list = self.config.passwords
+        failed_msg = ""
+        status_code = ExtractStatusCode.FAIL
         if not passwords_list:
             passwords_list = [None]
         for pwd in passwords_list:
@@ -222,21 +233,30 @@ class PyExtractor:
             try:
                 match archive_type:
                     case ArchiveType.ZIP:
-                        done = self.extract_zip(file, out_path, pwd)
+                        status_code = self.extract_zip(file, out_path, pwd)
                     case ArchiveType.TAR:
-                        done = self.extract_tar(file, out_path)
+                        status_code = self.extract_tar(file, out_path)
                     case ArchiveType.SEVENTH_ZIP:
-                        done = self.extract_7z(file, out_path, pwd)
+                        status_code = self.extract_7z(file, out_path, pwd)
                     case ArchiveType.RAR:
-                        done = self.extract_rar(file, out_path, pwd)
-                if done:
-                    break
-            except FileNotFoundError:
+                        status_code = self.extract_rar(file, out_path, pwd)
+                    case _:
+                        raise AssertionError("Not going to happen")
+                match status_code:
+                    case ExtractStatusCode.WRONG_PASSWORD:
+                        continue
+                    case _:
+                        break
+
+            except SevenZipCmdNotFound:
+                failed_msg = _(
+                    "Din't find 7z command, please make sure 7z is"
+                    " installed and available in PATH env"
+                )
                 break
-            except Exception:
-                continue
-                # raise
-        if done:
+        else:
+            failed_msg = _("None of the passwords can decrypt the archive")
+        if status_code == ExtractStatusCode.SUCCESS:
             end = time.time()
             time_cost = round(end - start)
             output_same_line(f"{indent} {_('passwd')} {pwd} {_('matches')}\n")
@@ -246,10 +266,15 @@ class PyExtractor:
                 f" {filename_color(str(out_path))}"
                 f" , {_('time cost')}: {time_cost}s"
             )
+            self.logger.info("%s is extracted to %s", file, out_path)
             return out_path
+        if status_code == ExtractStatusCode.WRONG_ENCODING:
+            failed_msg = _("None of the encodings can decode the archive")
+        if not failed_msg:
+            failed_msg = _("Invalid archive")
         output_same_line(
             f"{indent} {failed_color(_('Failed'))}"
-            f" {filename_color(str(file))} {_('Wrong password or invalid archive')}?\n"
+            f" {filename_color(str(file))} {failed_color(failed_msg)}\n"
         )
         return None
 

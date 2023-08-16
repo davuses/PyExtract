@@ -99,3 +99,13 @@ msgstr ""
 
 msgid "target directory"
 msgstr ""
+
+msgid "None of the passwords can decrypt the archive"
+msgstr ""
+
+msgid "Invalid archive"
+msgstr ""
+
+
+msgid "None of the encodings can decode the archive"
+msgstr ""
