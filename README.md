@@ -6,7 +6,7 @@ It can decrypt and decompress zip archives with Non-UTF-8 encoded password. see 
 
 ## Usage
 
-PyExtract requires Python >= 3.10 and 7-Zip program to run, make sure the `7z` binary is added to your machine's PATH environment variable.
+PyExtract requires Python >= 3.11 and 7-Zip program to run, make sure the `7z` binary is added to your machine's PATH environment variable.
 
 Install the required packages using pip:
 
