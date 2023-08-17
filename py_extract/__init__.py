@@ -44,6 +44,7 @@ def create_py_extractor():
         const="debug",
         help="debug mode",
     )
+    parser.add_argument("-t", "--target-dir", help="target directory")
     args = parser.parse_args()
 
     config_arg = args.config
@@ -54,6 +55,8 @@ def create_py_extractor():
         py_extract_config.auto_rename = arg_auto_rename
     if arg_debug := args.debug:
         py_extract_config.logging_level = arg_debug
+    if arg_target_dir := args.target_dir:
+        py_extract_config.target_directory = arg_target_dir
     logging_level = {"debug": "DEBUG"}.get(
         py_extract_config.logging_level, "WARNING"
     )

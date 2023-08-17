@@ -84,6 +84,7 @@ class PyExtractor:
             auto_rename=config.auto_rename,
             logger=logger,
         )
+        self.handled_archives = set()
 
     def run(
         self,
@@ -187,9 +188,7 @@ class PyExtractor:
                 self.logger.error("7z command not found")
                 raise SevenZipCmdNotFound from exc
             if "Wrong password" in str(exc):
-                self.logger.info(
-                    "%s , Wrong password: %s", archive_name, pwd
-                )
+                self.logger.info("%s , Wrong password: %s", archive_name, pwd)
                 return ExtractStatusCode.WRONG_PASSWORD
             self.logger.error("%s\n%s", archive_name, traceback.format_exc())
             return ExtractStatusCode.FAIL
@@ -198,7 +197,7 @@ class PyExtractor:
     def extract_archive(
         self, file: Path, archive_type: ArchiveType, dir_level
     ) -> Path | None:
-        """return out_path if done is True, else return None
+        """return out_path if status code == SUCCESS, else return None
 
         Args:
             file (Path):
@@ -292,6 +291,10 @@ class PyExtractor:
         for file in files_generator:
             if (not file.is_file()) or self.is_excluded_file(file):
                 continue
+            if file not in self.handled_archives:
+                self.handled_archives.add(file)
+            else:
+                continue
             file_type = magic.from_buffer(
                 open(file, "rb").read(2048), mime=True
             )
@@ -314,15 +317,15 @@ class PyExtractor:
             self.file_rename.rename_files_in_dirs(dirs_to_rename_files)
             if self.file_rename.auto_rename:
                 choice = "y"
-                print(f"\n{_('retry extracting')}")
+                print(f"{_('retry extracting')}:")
             else:
                 sys.stdout.write(
-                    f"\n{_('Do you want to retry extracting')}? [y/n]"
+                    f"{_('Do you want to retry extracting')}? [y/n]"
                 )
                 choice = input().lower()
             if choice in ["y", "Y"]:
                 for d in dirs_to_rename_files:
-                    self.extract_archives_recursively(d, dir_level=0)
+                    self.extract_archives_recursively(d, dir_level=dir_level)
 
 
 if __name__ == "__main__":
