@@ -4,7 +4,7 @@
 zip_metadata_encoding = ["cp936"]
 
 # language: en, cn
-language = "cn"
+language = "en"
 
 # automatically rename archives with bad filenames
 auto_rename = false

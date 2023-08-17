@@ -99,12 +99,10 @@ def test_py_extract():
         os.remove(_p)
 
     test_password_text = """\
-    filler
-    other_filler
-    ------
-    password
-    password2
-    """
+password2
+
+password
+"""
     test_password_path = "./temp/test_password.txt"
     with open(test_password_path, "w", encoding="utf-8") as test_pwd_file:
         test_pwd_file.write(test_password_text)

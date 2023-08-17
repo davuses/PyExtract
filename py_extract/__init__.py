@@ -30,6 +30,7 @@ def init_translation(lang):
 def create_py_extractor():
     parser = argparse.ArgumentParser(description="PyExtract")
     parser.add_argument("-c", "--config", help="config file path")
+    parser.add_argument("-t", "--target-dir", help="target directory")
     parser.add_argument(
         "-a",
         "--auto-rename",
@@ -44,7 +45,7 @@ def create_py_extractor():
         const="debug",
         help="debug mode",
     )
-    parser.add_argument("-t", "--target-dir", help="target directory")
+
     args = parser.parse_args()
 
     config_arg = args.config
