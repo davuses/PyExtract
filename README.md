@@ -2,11 +2,20 @@
 
 PyExtract is a utility that recursively finds and extracts archives in the target folder.
 
-It can decrypt and decompress zip archives with Non-UTF-8 encoded password. see related [superuser question](https://superuser.com/questions/1676282)
+It can decrypt and decompress zip archives with Non-UTF-8 encoded password. For more details, refer to the related [superuser question](https://superuser.com/questions/1676282).
 
-## Usage
+## Installation and Usage
 
-PyExtract requires Python >= 3.11 and 7-Zip program to run, make sure the `7z` binary is added to your machine's PATH environment variable.
+### Windows Users
+
+For Windows users, you can download the binary file from the [releases](https://github.com/davuses/PyExtract/releases) section.
+
+### Prerequisites
+
+- Python >= 3.11
+- 7-Zip program (`7z` binary) added to your machine's PATH environment variable.
+
+### Installation
 
 Install the required packages using pip:
 
@@ -26,7 +35,9 @@ Compile translation files using Python babel:
 pybabel compile -D py_extract -d locales/
 ```
 
-Create a configuration file `py_extract_config.toml` from `./config/example_config.toml`:
+### Configuration and Running
+
+Create a configuration file `py_extract_config.toml` by copying and modifying the `./config/example_config.toml`:
 
 Then run:
 
@@ -58,7 +69,7 @@ Here's an example of a configuration file:
 zip_metadata_encoding = ["cp936"]
 
 # language: en, cn
-language = "cn"
+language = "en"
 
 # automatically rename archives with bad filenames
 auto_rename = false
