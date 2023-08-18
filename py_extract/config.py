@@ -113,6 +113,6 @@ def load_config(config_path: str | None = None) -> PyExtractConfig:
             case _:
                 raise InvalidConfig(
                     "invalid configuration, please check"
-                    " ./config/example_config.toml for correct config"
+                    " ./config/example_config.toml for a valid configuration"
                 )
         return extract_config

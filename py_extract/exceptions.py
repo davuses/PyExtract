@@ -12,3 +12,15 @@ class BadFormat(Exception):
 
 class ConfigNotFound(Exception):
     pass
+
+
+class UnsafeTarfile(Exception):
+    ...
+
+
+class SevenZipExtractFail(Exception):
+    ...
+
+
+class SevenZipCmdNotFound(Exception):
+    ...

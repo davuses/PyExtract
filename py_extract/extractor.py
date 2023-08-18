@@ -16,6 +16,8 @@ import builtins
 
 
 import magic
+
+from .exceptions import SevenZipCmdNotFound, SevenZipExtractFail
 from .file_renaming import (
     RenameFileHandler,
 )
@@ -31,18 +33,6 @@ from .config import PyExtractConfig
 from .zip_decrypter import _ZipDecrypter  # pylint: disable=E0611
 
 setattr(zipfile, "_ZipDecrypter", _ZipDecrypter)
-
-
-class UnsafeTarfile(Exception):
-    ...
-
-
-class SevenZipExtractFail(Exception):
-    ...
-
-
-class SevenZipCmdNotFound(Exception):
-    ...
 
 
 class ExtractStatusCode(Enum):
@@ -86,9 +76,7 @@ class PyExtractor:
         )
         self.handled_archives = set()
 
-    def run(
-        self,
-    ):
+    def run(self):
         target_dir = self.config.target_directory
         print(_("target directory"), ":", filename_color(target_dir), "\n")
         self.extract_archives_recursively(target_dir)
@@ -154,12 +142,16 @@ class PyExtractor:
     def extract_tar(self, archive_name: Path, out_path: Path):
         return self.extract_7z(archive_name, out_path)
 
-    def extract_rar(self, archive_name: Path, out_path: Path, pwd=None):
+    def extract_rar(
+        self, archive_name: Path, out_path: Path, pwd: str | None = None
+    ):
         # didn't find a usable python library for rar, switch to 7z program
         # 7z reduces absolute paths to relative paths by default
         return self.extract_7z(archive_name, out_path, pwd)
 
-    def extract_7z(self, archive_name: Path, out_path: Path, pwd=None):
+    def extract_7z(
+        self, archive_name: Path, out_path: Path, pwd: str | None = None
+    ):
         try:
             assert shutil.which("7z")
             cmd = [
@@ -197,14 +189,7 @@ class PyExtractor:
     def extract_archive(
         self, file: Path, archive_type: ArchiveType, dir_level
     ) -> Path | None:
-        """return out_path if status code == SUCCESS, else return None
-
-        Args:
-            file (Path):
-            archive_type (ArchiveFileType)
-        Returns:
-            out_path (Path) | None
-        """
+        """Return output path if status code == SUCCESS, else return None"""
         target_out_dir = f"{file}_out"
         out_path = Path(target_out_dir)
         if out_path.exists():
@@ -250,7 +235,7 @@ class PyExtractor:
             except SevenZipCmdNotFound:
                 failed_msg = _(
                     "Din't find 7z command, please make sure 7z is"
-                    " installed and available in PATH env"
+                    " installed and available in PATH"
                 )
                 break
         else:
