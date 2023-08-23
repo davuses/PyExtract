@@ -1,6 +1,6 @@
 """Extract archives in target directory recursively """
 
-from logging import Logger
+from logging import getLogger
 import os
 import re
 import shutil
@@ -8,7 +8,6 @@ import stat
 import subprocess
 import sys
 import time
-import traceback
 import zipfile
 from enum import Enum, unique
 from pathlib import Path
@@ -66,19 +65,24 @@ def remove_readonly(func, path, _) -> None:
 
 
 class PyExtractor:
-    def __init__(self, config: PyExtractConfig, logger: Logger) -> None:
+    def __init__(self, config: PyExtractConfig) -> None:
         self.config = config
-        self.logger = logger
+        self.logger = getLogger(__name__)
         self.file_rename = RenameFileHandler(
             unwanted_substrings=config.rename_substrings,
             auto_rename=config.auto_rename,
-            logger=logger,
         )
         self.handled_archives = set()
 
     def run(self):
         target_dir = self.config.target_directory
-        print(_("target directory"), ":", filename_color(target_dir), "\n")
+        print(
+            f'{_("target directory")}: {filename_color(target_dir)} ,'
+            f' {_("config path")}: {filename_color(self.config.config_path)} ,'
+            f' {_("password path")}:'
+            f" {filename_color(self.config.password_path)}\n"
+        )
+        self.logger.info(self.config)
         self.extract_archives_recursively(target_dir)
 
     def is_excluded_file(self, file: Path) -> bool:
@@ -129,8 +133,7 @@ class PyExtractor:
                 if "Bad password" in repr(exc):
                     self.logger.info("%s wrong password", archive_name)
                     return ExtractStatusCode.WRONG_PASSWORD
-                traceback_info = traceback.format_exc()
-                self.logger.error("%s\n%s", archive_name, traceback_info)
+                self.logger.exception("%s", archive_name)
                 return ExtractStatusCode.FAIL
         self.logger.error(
             "None of encodings %s can decode %s",
@@ -177,12 +180,12 @@ class PyExtractor:
             if out_path.exists():
                 shutil.rmtree(out_path, onerror=remove_readonly)
             if isinstance(exc, AssertionError):
-                self.logger.error("7z command not found")
+                self.logger.exception("7z command not found")
                 raise SevenZipCmdNotFound from exc
             if "Wrong password" in str(exc):
                 self.logger.info("%s , Wrong password: %s", archive_name, pwd)
                 return ExtractStatusCode.WRONG_PASSWORD
-            self.logger.error("%s\n%s", archive_name, traceback.format_exc())
+            self.logger.exception(archive_name)
             return ExtractStatusCode.FAIL
         return ExtractStatusCode.SUCCESS
 
@@ -240,6 +243,7 @@ class PyExtractor:
                 break
         else:
             failed_msg = _("None of the passwords can decrypt the archive")
+            self.logger.error("No passwords can decrypt %s", file)
         if status_code == ExtractStatusCode.SUCCESS:
             end = time.time()
             time_cost = round(end - start)

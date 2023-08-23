@@ -1,5 +1,5 @@
 import builtins
-from logging import Logger
+from logging import getLogger
 import sys
 from pathlib import Path
 
@@ -11,11 +11,10 @@ class RenameFileHandler:
         self,
         unwanted_substrings: list[str],
         auto_rename: bool,
-        logger: Logger,
     ) -> None:
         self.unwanted_substrings = unwanted_substrings
         self.auto_rename = auto_rename
-        self.logger = logger
+        self.logger = getLogger(__name__)
 
     def has_unwanted_substrings_in_filenames(self, target_dir: Path) -> bool:
         for path in Path(target_dir).iterdir():

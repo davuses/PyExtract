@@ -110,5 +110,8 @@ msgstr "无效文件"
 msgid "None of the encodings can decode the archive"
 msgstr "所有编码都解码失败"
 
+msgid "config path"
+msgstr "配置文件路径"
 
-
+msgid "password path"
+msgstr "密码文件路径"

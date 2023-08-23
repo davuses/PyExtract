@@ -1,20 +1,21 @@
 import argparse
 import gettext
-import os
 import sys
+from pathlib import Path
+from logging import getLogger
 
 from .config import load_config
-from .logging_utils import setup_logger
 from .extractor import PyExtractor
+from .logging_utils import FormattedFileHandler
 
 
-def resource_path(relative_path):
+def resource_path(relative_path: str):
     """Get absolute path to resource, works for dev and for PyInstaller"""
     base_path = getattr(sys, "_MEIPASS", "./")
-    return os.path.join(base_path, relative_path)
+    return Path(base_path).joinpath(relative_path)
 
 
-def init_translation(lang):
+def init_translation(lang: str):
     app_name = "py_extract"
     localedir = resource_path("locales")
     lang_dict = {"cn": "zh_Hans_CN", "en": "en"}
@@ -61,9 +62,12 @@ def create_py_extractor():
     logging_level = {"debug": "DEBUG"}.get(
         py_extract_config.logging_level, "WARNING"
     )
-    logger = setup_logger(logging_level)
+    logger = getLogger(__name__)
+    logger.setLevel(level=logging_level)
+    log_path = "py_extract.log"
+    logger.addHandler(FormattedFileHandler(log_path))
 
     language = py_extract_config.language
     init_translation(language)
-    py_extractor = PyExtractor(config=py_extract_config, logger=logger)
+    py_extractor = PyExtractor(config=py_extract_config)
     return py_extractor

@@ -1,14 +1,14 @@
 import dataclasses
-import os
-import tomllib
+from pathlib import Path
 
-from .utils import load_passwords
+import tomllib
 
 from .exceptions import (
     ConfigNotFound,
     InvalidConfig,
     InvalidPath,
 )
+from .utils import load_passwords
 
 
 def is_list_of_str(list_to_test: list):
@@ -30,9 +30,11 @@ class PyExtractConfig:
     rename_substrings: list[str]
     target_directory: str
     passwords: list[str]
+    password_path: str
     language: str
     auto_rename: bool
     logging_level: str
+    config_path: str
 
     def __post_init__(self) -> None:
         assert is_list_of_str(self.zip_metadata_encoding)
@@ -44,7 +46,7 @@ class PyExtractConfig:
         assert isinstance(self.language, str)
         assert isinstance(self.auto_rename, bool)
         assert isinstance(self.logging_level, str)
-        if not os.path.exists(self.target_directory):
+        if not Path(self.target_directory).exists():
             raise InvalidPath(
                 f"target directory {self.target_directory} doesn't exist"
             )
@@ -65,14 +67,15 @@ config file should be found in one of these paths: {POSSIBLE_CONFIG_PATHS},\
 def load_config(config_path: str | None = None) -> PyExtractConfig:
     if not config_path:
         for p in POSSIBLE_CONFIG_PATHS:
-            if os.path.isfile(p):
+            if Path(p).is_file():
                 config_path = p
                 break
         else:
             raise ConfigNotFound(CONFIG_NOT_FOUND_ERROR_MSG)
     else:
-        if not os.path.isfile(config_path):
+        if not Path(config_path).is_file():
             raise ConfigNotFound(f"cannot find the config file: {config_path}")
+    config_path = str(Path(config_path).resolve())
     with open(config_path, mode="rb") as fp:
         toml_config = tomllib.load(fp)
         match toml_config:
@@ -92,7 +95,7 @@ def load_config(config_path: str | None = None) -> PyExtractConfig:
                 },
                 "rename": {"substrings": list() as rename_substrings},
             }:
-                if not os.path.exists(password_path):
+                if not Path(password_path).exists():
                     raise InvalidPath(
                         f"password file  {password_path} doesn't exist"
                     )
@@ -106,9 +109,11 @@ def load_config(config_path: str | None = None) -> PyExtractConfig:
                     rename_substrings=rename_substrings,
                     target_directory=target_directory,
                     passwords=passwords,
+                    password_path=password_path,
                     language=language,
                     auto_rename=auto_rename,
                     logging_level=logging_level,
+                    config_path=config_path,
                 )
             case _:
                 raise InvalidConfig(
