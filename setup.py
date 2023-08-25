@@ -1,6 +1,6 @@
-from setuptools import setup
 from Cython.Build import cythonize
 from Cython.Distutils import Extension
+from setuptools import setup
 
 extra_compile_args = ["-O3", "-ffast-math", "-fopenmp"]
 extra_link_args = ["-fopenmp"]

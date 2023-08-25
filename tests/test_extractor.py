@@ -76,8 +76,8 @@ def test_py_extract():
             "-mx9",
             "-mhe=on",
             str(temp_dir_path.joinpath("nested_archive.7z")),
-        ]
-        + nested_test_filepaths,
+            *nested_test_filepaths,
+        ],
         shell=False,
         encoding="utf-8",
         stdout=subprocess.PIPE,

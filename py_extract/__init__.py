@@ -1,8 +1,8 @@
 import argparse
 import gettext
 import sys
-from pathlib import Path
 from logging import getLogger
+from pathlib import Path
 
 from .config import load_config
 from .extractor import PyExtractor

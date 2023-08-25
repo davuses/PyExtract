@@ -1,9 +1,11 @@
 import builtins
-from logging import getLogger
 import sys
+from logging import getLogger
 from pathlib import Path
 
 from .utils import filename_color
+
+logger = getLogger(__name__)
 
 
 class RenameFileHandler:
@@ -14,7 +16,6 @@ class RenameFileHandler:
     ) -> None:
         self.unwanted_substrings = unwanted_substrings
         self.auto_rename = auto_rename
-        self.logger = getLogger(__name__)
 
     def has_unwanted_substrings_in_filenames(self, target_dir: Path) -> bool:
         for path in Path(target_dir).iterdir():
@@ -62,7 +63,7 @@ class RenameFileHandler:
                 choice = input().lower()
             if choice in ["y", "Y"]:
                 new_path = path.rename(path.with_name(newname))
-                self.logger.info("rename %s to %s", path, new_path)
+                logger.info("rename %s to %s", path, new_path)
                 print(_("rename done"))
             else:
                 print(_("skip rename"))

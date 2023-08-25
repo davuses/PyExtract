@@ -1,4 +1,5 @@
 from io import StringIO
+
 from py_extract.utils import load_passwords
 
 

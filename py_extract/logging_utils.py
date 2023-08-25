@@ -5,7 +5,7 @@ from logging import (
 
 
 class FormattedFileHandler(FileHandler):
-    def __init__(self, filename) -> None:
+    def __init__(self, filename: str) -> None:
         super().__init__(filename, encoding="utf-8")
         formatter = Formatter(
             (

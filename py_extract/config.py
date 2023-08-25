@@ -11,7 +11,7 @@ from .exceptions import (
 from .utils import load_passwords
 
 
-def is_list_of_str(list_to_test: list):
+def is_list_of_str(list_to_test: list[str]):
     if not isinstance(list_to_test, list):
         return False
     if list_to_test and not all(

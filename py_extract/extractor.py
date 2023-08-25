@@ -1,6 +1,4 @@
-"""Extract archives in target directory recursively """
-
-from logging import getLogger
+import builtins
 import os
 import re
 import shutil
@@ -10,12 +8,12 @@ import sys
 import time
 import zipfile
 from enum import Enum, unique
+from logging import getLogger
 from pathlib import Path
-import builtins
-
 
 import magic
 
+from .config import PyExtractConfig
 from .exceptions import SevenZipCmdNotFound, SevenZipExtractFail
 from .file_renaming import (
     RenameFileHandler,
@@ -26,12 +24,13 @@ from .utils import (
     filename_color,
     output_same_line,
 )
-from .config import PyExtractConfig
 
 # from .config_parser import py_extract_config
 from .zip_decrypter import _ZipDecrypter  # pylint: disable=E0611
 
 setattr(zipfile, "_ZipDecrypter", _ZipDecrypter)
+
+logger = getLogger(__name__)
 
 
 class ExtractStatusCode(Enum):
@@ -67,12 +66,11 @@ def remove_readonly(func, path, _) -> None:
 class PyExtractor:
     def __init__(self, config: PyExtractConfig) -> None:
         self.config = config
-        self.logger = getLogger(__name__)
         self.file_rename = RenameFileHandler(
             unwanted_substrings=config.rename_substrings,
             auto_rename=config.auto_rename,
         )
-        self.handled_archives = set()
+        self.handled_archives: set[Path] = set()
 
     def run(self):
         target_dir = self.config.target_directory
@@ -82,7 +80,7 @@ class PyExtractor:
             f' {_("password path")}:'
             f" {filename_color(self.config.password_path)}\n"
         )
-        self.logger.info(self.config)
+        logger.info(self.config)
         self.extract_archives_recursively(target_dir)
 
     def is_excluded_file(self, file: Path) -> bool:
@@ -111,7 +109,7 @@ class PyExtractor:
         additional_encodings = self.config.zip_metadata_encoding
         additional_encodings.append(default_encoding)
         for encoding in additional_encodings:
-            self.logger.info("try encoding: %s", encoding)
+            logger.info("try encoding: %s", encoding)
             password: bytes | None = pwd.encode(encoding) if pwd else None
             try:
                 with zipfile.ZipFile(
@@ -126,16 +124,14 @@ class PyExtractor:
                     # some algorithms are not supported by zipfile
                     return self.extract_7z(archive_name, out_path, pwd=pwd)
                 if isinstance(exc, UnicodeDecodeError):
-                    self.logger.info(
-                        "%s cannot decode %s", encoding, archive_name
-                    )
+                    logger.info("%s cannot decode %s", encoding, archive_name)
                     continue
                 if "Bad password" in repr(exc):
-                    self.logger.info("%s wrong password", archive_name)
+                    logger.info("%s wrong password", archive_name)
                     return ExtractStatusCode.WRONG_PASSWORD
-                self.logger.exception("%s", archive_name)
+                logger.exception("%s", archive_name)
                 return ExtractStatusCode.FAIL
-        self.logger.error(
+        logger.error(
             "None of encodings %s can decode %s",
             additional_encodings,
             archive_name,
@@ -180,17 +176,17 @@ class PyExtractor:
             if out_path.exists():
                 shutil.rmtree(out_path, onerror=remove_readonly)
             if isinstance(exc, AssertionError):
-                self.logger.exception("7z command not found")
+                logger.exception("7z command not found")
                 raise SevenZipCmdNotFound from exc
             if "Wrong password" in str(exc):
-                self.logger.info("%s , Wrong password: %s", archive_name, pwd)
+                logger.info("%s , Wrong password: %s", archive_name, pwd)
                 return ExtractStatusCode.WRONG_PASSWORD
-            self.logger.exception(archive_name)
+            logger.exception(archive_name)
             return ExtractStatusCode.FAIL
         return ExtractStatusCode.SUCCESS
 
     def extract_archive(
-        self, file: Path, archive_type: ArchiveType, dir_level
+        self, file: Path, archive_type: ArchiveType, dir_level: int
     ) -> Path | None:
         """Return output path if status code == SUCCESS, else return None"""
         target_out_dir = f"{file}_out"
@@ -243,7 +239,7 @@ class PyExtractor:
                 break
         else:
             failed_msg = _("None of the passwords can decrypt the archive")
-            self.logger.error("No passwords can decrypt %s", file)
+            logger.error("No passwords can decrypt %s", file)
         if status_code == ExtractStatusCode.SUCCESS:
             end = time.time()
             time_cost = round(end - start)
@@ -254,7 +250,7 @@ class PyExtractor:
                 f" {filename_color(str(out_path))}"
                 f" , {_('time cost')}: {time_cost}s"
             )
-            self.logger.info("%s is extracted to %s", file, out_path)
+            logger.info("%s is extracted to %s", file, out_path)
             return out_path
         if status_code == ExtractStatusCode.WRONG_ENCODING:
             failed_msg = _("None of the encodings can decode the archive")
@@ -267,7 +263,7 @@ class PyExtractor:
         return None
 
     def extract_archives_recursively(
-        self, target_dir: str | Path, dir_level=0
+        self, target_dir: str | Path, dir_level: int = 0
     ) -> None:
         # don't match files in subdirs if in root directory
         dirs_to_rename_files: set[Path] = set()
