@@ -207,10 +207,9 @@ class PyExtractor:
         pwd = ""
         start = time.time()
         passwords_list = self.config.passwords
+        passwords_list.insert(0, "")
         failed_msg = ""
         status_code = ExtractStatusCode.FAIL
-        if not passwords_list:
-            passwords_list = [None]
         for pwd in passwords_list:
             output_same_line(f"{indent} {_('try passwd')} {pwd}")
             try:
