@@ -1,8 +1,17 @@
 # PyExtract
 
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+![GitHub](https://img.shields.io/github/license/davuses/PyExtract?style=flat-square)
+
 PyExtract is a utility that recursively finds and extracts archives in the target folder.
 
 It can decrypt and decompress zip archives with Non-UTF-8 encoded password. For more details, refer to the related [superuser question](https://superuser.com/questions/1676282).
+
+PyExtract uses Cython to speed up the `zipfile` library
+
+## Screenshots
+
+<img width="1033" alt="image" src="https://github.com/davuses/PyExtract/assets/54793121/12049df2-d789-4525-8666-079eeaa81e2c">
 
 ## Installation and Usage
 
@@ -29,10 +38,10 @@ Make sure you have Cython installed, and then compile the Cython extension:
 python setup.py build_ext  --inplace
 ```
 
-Compile translation files using Python babel:
+Compile translation files:
 
 ```sh
-pybabel compile -D py_extract -d locales/
+python setup.py compile_catalog -D py_extract -d locales/
 ```
 
 ### Configuration and Running

@@ -29,6 +29,7 @@ def failed_color(text: str) -> str:
 def load_passwords(pwd_file: TextIO) -> list[str]:
     """passwords file should be like:
     ```
+    # passwords.txt
     password_one_in_second_group
     password_two_in_second_group
 

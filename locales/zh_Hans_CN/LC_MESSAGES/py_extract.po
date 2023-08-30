@@ -20,7 +20,7 @@ msgstr ""
 
 #: py_extract/py_extract.py:305 py_extract/py_extract.py:310
 #: py_extract/py_extract.py:321
-msgid "try passwd"
+msgid "try password"
 msgstr "尝试密码"
 
 #: py_extract/py_extract.py:306
@@ -36,7 +36,7 @@ msgid "Extracting"
 msgstr "正在解压"
 
 #: py_extract/py_extract.py:311
-msgid "passwd"
+msgid "password"
 msgstr "密码"
 
 #: py_extract/py_extract.py:312

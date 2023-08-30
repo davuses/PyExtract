@@ -1,3 +1,4 @@
+from babel.messages import frontend as babel
 from Cython.Build import cythonize
 from Cython.Distutils import Extension
 from setuptools import setup
@@ -25,4 +26,5 @@ setup(
         language_level=3,
         compiler_directives={"always_allow_keywords": True},
     ),
+    cmdclass={"compile_catalog": babel.compile_catalog},
 )

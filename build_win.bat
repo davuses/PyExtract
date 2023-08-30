@@ -1,4 +1,4 @@
-pybabel compile -D py_extract -d locales/
+python setup.py compile_catalog -D py_extract -d locales/
 
 python setup.py build_ext  --inplace
 

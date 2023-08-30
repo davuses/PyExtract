@@ -211,7 +211,7 @@ class PyExtractor:
         failed_msg = ""
         status_code = ExtractStatusCode.FAIL
         for pwd in passwords_list:
-            output_same_line(f"{indent} {_('try passwd')} {pwd}")
+            output_same_line(f"{indent} {_('try password')} {pwd}")
             try:
                 match archive_type:
                     case ArchiveType.ZIP:
@@ -242,7 +242,7 @@ class PyExtractor:
         if status_code == ExtractStatusCode.SUCCESS:
             end = time.time()
             time_cost = round(end - start)
-            output_same_line(f"{indent} {_('passwd')} {pwd} {_('matches')}\n")
+            output_same_line(f"{indent} {_('password')} {pwd} {_('matches')}\n")
             print(
                 f"{indent} {done_color(_('Done'))}"
                 f" {filename_color(str(file))} {_('extracted to')}"
