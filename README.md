@@ -15,10 +15,6 @@ PyExtract uses Cython to speed up the `zipfile` library
 
 ## Installation and Usage
 
-### Windows Users
-
-For Windows users, you can download the binary file from the [releases](https://github.com/davuses/PyExtract/releases) section.
-
 ### Prerequisites
 
 - Python >= 3.11
@@ -102,6 +98,10 @@ substrings = ["not_an_archive"]
 substrings = ["删除", "删除我", "delete_this"]
 
 ```
+
+### Windows Users
+
+For Windows users, you can download the compiled binary file from the [releases](https://github.com/davuses/PyExtract/releases) section. Or you can run `build_win.bat` to build the binary by yourself.
 
 ### Password File
 

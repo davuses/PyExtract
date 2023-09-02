@@ -1,3 +1,6 @@
+python -m pip install -r requirements.txt
+python -m pip install pyinstaller
+
 python setup.py compile_catalog -D py_extract -d locales/
 
 python setup.py build_ext  --inplace

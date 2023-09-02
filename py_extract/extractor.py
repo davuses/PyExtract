@@ -266,22 +266,26 @@ class PyExtractor:
     ) -> None:
         # don't match files in subdirs if in root directory
         dirs_to_rename_files: set[Path] = set()
-        files_generator = (
+        files = (
             Path(target_dir).iterdir()
             if dir_level == 0
             else Path(target_dir).glob("**/*")
         )
 
-        for file in files_generator:
+        for file in files:
             if (not file.is_file()) or self.is_excluded_file(file):
                 continue
             if file not in self.handled_archives:
                 self.handled_archives.add(file)
             else:
                 continue
-            file_type = magic.from_buffer(
-                open(file, "rb").read(2048), mime=True
-            )
+            try:
+                file_type = magic.from_buffer(
+                    open(file, "rb").read(2048), mime=True
+                )
+            except Exception:
+                logger.exception("%s", file)
+                continue
             try:
                 archive_type = ArchiveType(file_type)
             except ValueError:
