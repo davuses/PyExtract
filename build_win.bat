@@ -1,5 +1,4 @@
-python -m pip install -r requirements.txt
-python -m pip install pyinstaller
+python -m pip install pyinstaller -r requirements.txt
 
 python setup.py compile_catalog -D py_extract -d locales/
 

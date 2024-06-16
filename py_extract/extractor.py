@@ -91,7 +91,7 @@ class PyExtractor:
             or any((sub in file.name for sub in self.config.exclude_substrings))
             or bool(
                 re.search(
-                    r"part(?:[2-9]|[1-9][0-9]|100|0[2-9])\.rar", str(file)
+                    r"part(?:[2-9]|[1-9][0-9]|100|0[2-9])\.(rar|RAR)", str(file)
                 )
             )
         )
@@ -102,34 +102,58 @@ class PyExtractor:
         out_path: Path,
         pwd: str | None = None,
         default_encoding="utf-8",
+        aes=False,
     ):
         # https://docs.python.org/3/library/zipfile.html#zipfile.ZipFile
         # Monkey patch the decryption of zipfile with C for better performance, it
         # is about 10% slower than the 7z program in testing.
         additional_encodings = self.config.zip_metadata_encoding
-        additional_encodings.append(default_encoding)
+        if default_encoding not in additional_encodings:
+            additional_encodings.append(default_encoding)
+        # logger.info("encodings: %s", additional_encodings)
         for encoding in additional_encodings:
-            logger.info("try encoding: %s", encoding)
+            # logger.info("extract zip with encoding: %s", encoding)
             password: bytes | None = pwd.encode(encoding) if pwd else None
             try:
-                with zipfile.ZipFile(
-                    archive_name, "r", metadata_encoding=encoding
-                ) as zip_file:
-                    zip_file.extractall(out_path, pwd=password)
-                    return ExtractStatusCode.SUCCESS
+                if aes:
+                    import pyzipper
+
+                    with pyzipper.AESZipFile(
+                        archive_name,
+                        "r",
+                        compression=pyzipper.ZIP_DEFLATED,
+                        encryption=pyzipper.WZ_AES,
+                    ) as extracted_zip:
+                        extracted_zip.extractall(out_path, pwd=password)
+                else:
+                    with zipfile.ZipFile(
+                        archive_name, "r", metadata_encoding=encoding
+                    ) as zip_file:
+                        zip_file.extractall(out_path, pwd=password)
+                return ExtractStatusCode.SUCCESS
             except Exception as exc:
                 if out_path.exists():
                     shutil.rmtree(out_path, onerror=remove_readonly)
                 if isinstance(exc, NotImplementedError):
                     # some algorithms are not supported by zipfile
+                    logger.exception(
+                        "%s algorithms NotImplemented", archive_name
+                    )
+                    if not aes:
+                        return self.extract_zip(
+                            archive_name, out_path, pwd=pwd, aes=True
+                        )
                     return self.extract_7z(archive_name, out_path, pwd=pwd)
                 if isinstance(exc, UnicodeDecodeError):
                     logger.info("%s cannot decode %s", encoding, archive_name)
                     continue
-                if "Bad password" in repr(exc):
-                    logger.info("%s wrong password", archive_name)
+                if re.search(
+                    r"Bad password|is encrypted|Bad CRC-32", repr(exc)
+                ):
+                    # if "Bad password" in repr(exc) or "is encrypted" in repr(exc):
+                    logger.info("%s, wrong password: %s", archive_name, pwd)
                     return ExtractStatusCode.WRONG_PASSWORD
-                logger.exception("%s", archive_name)
+                logger.exception("%s pwd:%s", archive_name, pwd)
                 return ExtractStatusCode.FAIL
         logger.error(
             "None of encodings %s can decode %s",
@@ -207,6 +231,7 @@ class PyExtractor:
         pwd = ""
         start = time.time()
         passwords_list = self.config.passwords
+        # prepend empty password into passwords list
         passwords_list.insert(0, "")
         failed_msg = ""
         status_code = ExtractStatusCode.FAIL
@@ -297,6 +322,7 @@ class PyExtractor:
                         out_dir.as_posix(), dir_level=dir_level + 1
                     )
                 else:
+                    # TODO: figure out a way to only rename failed archives, otherwise extracted archives will be renamed too
                     if self.file_rename.has_unwanted_substrings_in_filenames(
                         file.parent
                     ):
